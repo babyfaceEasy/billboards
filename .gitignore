@@ -1,2 +1,5 @@
 config/*
 node_modules/*
+.DS_Store
+uploads/*
+hold.txt

@@ -1,44 +1,23 @@
 const express = require('express')
 const router = express.Router()
 const {User} = require('../sequelize')
-const bcrypt = require('bcrypt')
+const ac = require('../accesscontrol')
+const jwt = require('jsonwebtoken')
 const saltRounds = 10
+const middlewares = require('../middlewares')
 
 //test url
+/*
 router.get('/test-user', function(req, res){
     res.json('we are on user test routes page')
 })
+*/
 
-//create a new user(register)
-router.post('/', function(req, res){
-    //create user object from body
-    let user = {
-        email: req.body.email,
-        password: req.body.password,
-        first_name : req.body.firstName,
-        last_name: req.body.lastName,
-        gender: req.body.gender,
-        phone_num: req.body.phone_num
-    }
-
-    bcrypt.hash(user.password, saltRounds).then(function(hash) {
-        //assign hash to user object
-        user.password = hash
-        //save into the db
-        User.create(user)
-        .then( (ret) => {
-            //create returns the new user all details
-            res.json(ret)
-        })
-        .catch ( (err) =>  {
-            res.status(400).json({err: `An error occured while creating a new user cos ${err}`})
-        })
-    })
-})
+//set the block here
+router.all('*', middlewares.verifyJWTToken)
 
 //gets user profile details
 router.get('/:userId', function(req, res){
-    
     User.findOne({
         where: {id: req.params.userId },
         attributes: ['first_name', 'last_name', 'phone_num', 'gender', 'email']

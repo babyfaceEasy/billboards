@@ -4,6 +4,7 @@ const LocalStrategy = require('passport-local').Strategy
 const {User} = require('./sequelize')
 const ExtractJWT = passportJWT.ExtractJwt
 const JWTStrategy = passportJWT.Strategy
+const bcrypt = require('bcrypt')
 
 passport.use(new LocalStrategy({
     usernameField: 'email',
@@ -16,8 +17,8 @@ function(email, password, cb){
     })
     .then((user) => {
         console.log(`KUNLE IS CONFIRMING: ${user.email}. PLS WORK`)
-        if (!user) {
-            return cb(null, false, {message: 'Incorrect email'})
+        if (!user || !bcrypt.compareSync(password, user.password)) {
+            return cb(null, false, {message: 'Incorrect email and password credentials'})
         }
         return cb(null, user, {message: 'Logged In'})
     })

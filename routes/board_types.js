@@ -1,17 +1,25 @@
 var express = require('express')
 var router = express.Router()
 const {Type} = require('../sequelize')
-//test url
+const ac = require('../accesscontrol')
+const msg = require('../messages')
+const middlewares = require('../middlewares')
+const errMsg = msg.error
+const sucMsg = msg.success
 
-router.get('/test', function(req, res){
-    res.send('This is to test that board_types file is live.')
-})
+router.all('*', middlewares.verifyJWTToken)
 
 router.post('/', function(req, res){
-    var ret = {'name': req.body.name}
 
-    //console.log(Type)
-
+    //this is to check if the current user role is allowed to perform this action
+    const permission = ac.can(req.user.role).createAny('board_type')
+    const ownPermission = ac.can(req.user.role).createOwn('board_type')
+    
+    if (!permission.granted && !ownPermission.granted) {
+        return res.status(403).json({'messsage': errMsg.action_not_allowed})
+    }
+    
+    let ret = {'name': req.body.name}
     Type.create({name: ret.name})
         .then(type => {
             //here the save was successfully and `type` is the new data
@@ -20,20 +28,31 @@ router.post('/', function(req, res){
         .catch(err => {
             console.log(`Error in creaing new board type due to ${err}`)
             res.status(400).json({err: `Error in creaing new board type due to ${err}`})
-
         })
-    //save inside db
-    //res.send('The board name is ' + ret.name)
 })
 
+
 router.get('/', function(req, res){
+
+    const permission = ac.can(req.user.role).readAny('board_type')
+    const ownPermission = ac.can(req.user.role).readOwn('board_type')
+
+    if(!permission.granted && !ownPermission.granted){
+        res.status(403).json({'message': errMsg.action_not_allowed})
+    }
     Type.findAll().then(board_types => {
         res.json({data: board_types})
     })
 })
 
 router.get('/:typeId', function(req, res){
-    //console.log(req.params.typeId)
+
+    const permission = ac.can(req.user.role).readAny('board_type')
+    const ownPermission = ac.can(req.user.role).readOwn('board_type')
+
+    if (!permission.granted && !ownPermission.granted) {
+        res.status(403).json({message: errMsg.action_not_allowed})
+    }
     
     Type.findById(req.params.typeId)
         .then(board_type => res.json(board_type))
@@ -41,6 +60,13 @@ router.get('/:typeId', function(req, res){
 })
 
 router.put('/:typeId', function(req, res){
+    const permission = ac.can(req.user.role).updateAny('board_type')
+    const ownPermission = ac.can(req.user.role).updateOwn('board_type')
+
+    if(!permission.granted && !ownPermission.granted){
+        res.status(403).json({'message': errMsg.action_not_allowed})
+    }
+
     Type.update(
         {name: req.body.name},
         {returning: true, where: {id: req.params.typeId}}
@@ -54,6 +80,12 @@ router.put('/:typeId', function(req, res){
     
 })
 router.delete('/:typeId', function(req, res){
+    const permission = ac.can(req.user.role).readAny('board_type')
+    const ownPermission = ac.can(req.user.role).readOwn('board_type')
+
+    if(!permission.granted && !ownPermission.granted){
+        return res.status(403).json({'message': errMsg.action_not_allowed})
+    }
     Type.destroy({where: {id: req.params.typeId}})
         .then((affectedRows) => {
             res.json(affectedRows)

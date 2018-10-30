@@ -4,6 +4,12 @@ var express = require('express')
 var app = express()
 var port = process.env.PORT || 8080
 
+
+//LOGGING
+//=================================================
+const morgan = require('morgan')
+app.use(morgan('dev'))
+
 //MODELS
 //==================================================
 var db = require('./models')
@@ -13,12 +19,12 @@ var db = require('./models')
 const passport = require('passport');
 require('./passport')
 
-
-
+//ACCESSCONTROL SETUP
+//==================================================
+const accesscontrol = require('./accesscontrol')
 
 //MIDDLEWARES
 //=================================================
-
 //this is for parsing documents and files
 const bodyParser = require('body-parser')
 app.use(bodyParser.json())
@@ -37,11 +43,13 @@ app.all(function(req, res, next){
 const boardTypesRoutes = require('./routes/board_types')
 const userRoutes = require('./routes/users')
 const boardRoutes = require('./routes/boards')
-const auth = require('./routes/auth')
-app.use('/types', boardTypesRoutes)
+const authRoutes = require('./routes/auth')
+const registerRoutes = require('./routes/register')
+app.use('/types', passport.authenticate('jwt', {session: false}),  boardTypesRoutes)
 app.use('/user', passport.authenticate('jwt', {session:false}),  userRoutes )
 app.use('/board', boardRoutes)
-app.use('/auth', auth)
+app.use('/auth', authRoutes)
+app.use('/register', registerRoutes)
 
 
 //START SERVER

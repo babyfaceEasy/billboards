@@ -36,6 +36,11 @@ module.exports = (sequelize, type) => {
         phone_num:{
             type: type.STRING(100),
             allowNull:false
+        },
+        //role
+        role:{
+            type: type.STRING(100),
+            allowNull:false
         }
     })//end of return
 }//end of export
