@@ -8,6 +8,9 @@ const multer = require('multer')
 const crypto = require('crypto')
 const jwt = require('jsonwebtoken')
 const ac = require('../accesscontrol')
+const middlewares = require('../middlewares')
+const msg = require('../messages')
+const errMsg = msg.error
 //https://github.com/googlemaps/google-maps-services-js
 const googleMapsClient = require('@google/maps').createClient({
     key: 'AIzaSyD6rg2lXehSl9JLmqiwXNeTSxW1IpQaJUU'
@@ -28,9 +31,10 @@ const upload = multer({storage: storage})
 //end of multer setup
 const {Board, Type} = require('../sequelize')
 
-router.get('/test', function(req, res){
-    res.send('testing board routes')
-})
+
+//this is to get the current user
+router.all('*', middlewares.verifyJWTToken)
+
 
 router.post('/test-image', upload.single('image'), (req, res, next) => {
     if (!req.file) {
@@ -43,8 +47,17 @@ router.post('/test-image', upload.single('image'), (req, res, next) => {
     }
 })
 
+/**
+ * Returns a list of all boards.
+ */
 router.get('/', async function(req, res){
-    //list of all boards
+    //check for permission
+    const permission = ac.can(req.user.role).readAny('board')
+    const ownPermission = ac.can(req.user.role).readOwn('board')
+    if (!permission.granted && !ownPermission.granted) {
+        return res.status(403).json({'message': errMsg.ACTION_NOT_ALLOWED})
+    }
+
     Board.findAndCountAll({limit: req.query.limit, offset: req.skip})
     .then((results) => {
         const itemCount = results.count
@@ -65,32 +78,11 @@ router.get('/', async function(req, res){
 router.post('/', upload.single('img_url'), function(req, res, next){
     //use this to detect file types and den use it to save data
     //only img types in the db https://github.com/sindresorhus/file-type
-    const token = (req.headers['authorization']).split(' ')[1]
-    console.log(token)
-    if (!token) {
-        return res.status(401).json({auth: false, message: 'No token provided!'})
-    }
-    //verify the token
-    let  decodedToken = null
-    try{
-        decodedToken = jwt.verify(token, 'b@byf2cezzz');
-        //console.log(`Role:  ${decodedToken.role}`)
-    }catch(err){
-        //invalid log
-        return res.status(401).json({auth: false, message: 'Invalid Token'})
-    }
 
     //this is to check if they can create a board
-    const permission = ac.can(decodedToken.role).createOwn('board')
-    //console.log(permission.granted)
-    //console.log(permission.attributes)
-
-    //create a new board
-    let board = {
-        name: req.body.name,
-        typeId: req.body.typeId,
-        location: req.body.location,
-        img_url: req.file.path
+    const permission = ac.can(req.user.role).createOwn('board')
+    if (!permission.granted){
+        return res.status(403).json({'message': errMsg.ACTION_NOT_ALLOWED})
     }
 
     //this is to effect the geo-coding activities to save lat, lng
@@ -99,37 +91,50 @@ router.post('/', upload.single('img_url'), function(req, res, next){
     }, function(err, response){
         if (!err) {
             //nb: results returns an array so u need to pick the first one to work well
+            let board = {
+                name: req.body.name,
+                typeId: req.body.typeId,
+                location: req.body.location,
+                img_url: req.file.path,
+                rate: req.body.rate,
+                reach: req.body.reach
+            }
+
             //check to see if status is = 'OK'
-            let results = response.json.results
+            if (response.json.status == 'OK') {
+                let result = response.json.results[0]
+                board.longitude = result.geometry.location.lng
+                board.latitude = result.geometry.location.lat
+                board.geocode_json = JSON.stringify(response.json)
+            }
+
+            Board.create(board)
+            .then((board) => {
+                return res.json(board)
+            })
+            .catch(err => {
+                return res.status(400).json({err: `Error in creating new board bcos: ${err}`})
+            })
             //console.log(response.json.status)
             //console.log(`Latitude: ${results[0].geometry.location.lat}`)
-
             //this doesn't get set bcos of call back variable scope probs
             //read this link to solve the probs
             //https://www.pluralsight.com/guides/javascript-callbacks-variable-scope-problem
-            board.longitude = results[0].geometry.location.lng
-            board.latitude = results[0].geometry.location.lat
             //console.log(response.json.results)
         }else{
             console.log(`Error using the gecode to get data: ${err}`)
         }
     })
-
-    //process.exit(0)
-
-    console.log(`Board value now is ${board.longitude}`)
-
-    Board.create(board)
-    .then((board) => {
-        return res.json(board)
-    })
-    .catch(err => {
-        return res.status(400).json({err: `Error in creating new board bcos: ${err}`})
-    })
 })
 
 router.get('/:boardId', function(req, res){
-    
+
+    const permission = ac.can(req.user.role).readAny('board')
+    const ownPermission = ac.can(req.user.role).readOwn('board')
+
+    if (!permission.granted && !ownPermission.granted) {
+        return res.status(403).json({'message': errMsg.ACTION_NOT_ALLOWED})
+    }
     Board.findOne({
         include: [{model: Type }],
         where: {id: req.params.boardId},
@@ -147,26 +152,68 @@ router.get('/:boardId', function(req, res){
     })
 })
 
+/**
+ * This is to update a board value
+ */
 router.put('/:boardId', function(req, res){
-    //update parameters
-    let board = {
-        name: req.body.name,
-        typeId: req.body.typeId,
-        location: req.body.location
+
+    const permission = ac.can(req.user.role).updateAny('board')
+    const ownPermission = ac.can(req.user.role).updateOwn('board')
+
+    if (!permission.granted && !ownPermission.granted) {
+        return res.status(403).json({'message': errMsg.ACTION_NOT_ALLOWED})
     }
-    Board.findById(req.params.boardId)
-    .then((boardRet) => {
-        return boardRet.update(board)
-    })
-    .then((resp) => {
-        return res.json(resp)
-    })
-    .catch(err => {
-        return res.status(400).json({err : `Error occured while updating this board, because ${err}`})
+
+    //to save processing time, make sure u check to see if theres a change in the locatioin value
+    //before calling google geocode code
+
+    googleMapsClient.geocode({
+        'address': board.location
+    }, function(err, response){
+        if (!err) {
+            //nb: results returns an array so u need to pick the first one to work well
+            let board = {
+                name: req.body.name,
+                typeId: req.body.typeId,
+                location: req.body.location,
+                img_url: req.file.path,
+                rate: req.body.rate,
+                reach: req.body.reach
+            }
+
+            //check to see if status is = 'OK'
+            if (response.json.status == 'OK') {
+                let result = response.json.results[0]
+                board.longitude = result.geometry.location.lng
+                board.latitude = result.geometry.location.lat
+                board.geocode_json = JSON.stringify(response.json)
+            }
+
+            Board.findById(req.params.boardId)
+            .then((boardRet) => {
+                return boardRet.update(board)
+            })
+            .then((resp) => {
+                return res.json(resp)
+            })
+            .catch(err => {
+                return res.status(400).json({err : `Error occured while updating this board, because ${err}`})
+            })
+        }else{
+            console.log(`Error using the gecode to get data: ${err}`)
+        }
     })
 })
 
 router.delete('/:boardId', function(req, res){
+
+    const permission = ac.can(req.user.role).deleteAny('board')
+    const ownPermission = ac.can(req.user.role).deleteOwn('board')
+
+    if (!permission.granted && !ownPermission.granted) {
+        return res.status(403).json({'message': errMsg.ACTION_NOT_ALLOWED})
+    }
+
     //delete a board 
     Board.findById(req.params.boardId)
     .then((board) => {

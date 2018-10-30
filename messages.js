@@ -1,6 +1,6 @@
 module.exports = {
     error : {
-        action_not_allowed: 'You are not authorized to carry out this action.'
+        ACTION_NOT_ALLOWED: 'You are not authorized to carry out this action.'
     },
 
     success : {
