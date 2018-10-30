@@ -21,6 +21,7 @@ const Board = BoardModel(sequelize, Sequelize)
 //relationships
 Board.belongsTo(Type)
 
+
 sequelize.sync()
     .then(() => {
         console.log(`Database & tables ccreated!`)

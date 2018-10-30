@@ -10,6 +10,7 @@ module.exports = (sequelize, type) => {
         rate: {type: type.FLOAT, allowNull:false, defaultValue: 0.00},// same as price
         reach: {type: type.INTEGER, allowNull:false, defaultValue:0}, 
         vacant: {type: type.BOOLEAN, allowNull:false, defaultValue:false},
-        img_url: { type: type.STRING, allowNull:true, defaultValue:null, validate: { len: [1, 200]}}
+        img_url: { type: type.STRING, allowNull:true, defaultValue:null, validate: { len: [1, 200]}},
+        geocode_json: { type: type.TEXT, allowNull:true, defaultValue: null}
     })
 }
